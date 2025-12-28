@@ -37,7 +37,7 @@ try {
                     Remove-Item $_ -Force -ErrorAction SilentlyContinue
                 }
             }
-            [Microsoft.PowerShell.PSConsoleReadLine]::ClearHistory() -ErrorAction SilentlyContinue
+            [Microsoft.PowerShell.PSConsoleReadLine]::ClearHistory()
             Remove-Item (Get-PSReadlineOption).HistorySavePath -ErrorAction SilentlyContinue
         } catch {}
         
